@@ -27,6 +27,10 @@ The startup catalog loads the 4,428 unique songs in `data/songs_deduped.csv`. If
 npm test
 ```
 
+## Optional: Enable YouTube Export
+
+YouTube export needs a Google OAuth Web client ID; it cannot work until you create one in Google Cloud. Follow [YouTube Export Setup](YOUTUBE_EXPORT_SETUP.md), copy `.env.example` to `.env`, and replace the placeholder with your client ID. Then restart GenMix with `npm start` so it regenerates the browser configuration.
+
 ---
 
 ## 🎯 Try These Features

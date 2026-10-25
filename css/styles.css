@@ -391,15 +391,8 @@ textarea {
     min-height: 48px;
 }
 
-/* Blur is restrained and falls back to solid surfaces on older browsers. */
+/* Keep translucent surfaces without forcing the browser to blur content behind them. */
 @supports (backdrop-filter: blur(1px)) {
-    .menu-panel,
-    .dashboard-section,
-    .wizard-panel {
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-    }
-
     .menu-panel {
         background: var(--bg-glass);
     }
@@ -671,7 +664,6 @@ textarea {
     border: 1px solid var(--border-medium);
     border-radius: var(--border-radius-lg);
     box-shadow: var(--shadow-panel);
-    backdrop-filter: blur(12px);
 }
 
 .playlist-detail-header {
@@ -1501,7 +1493,6 @@ textarea {
     border: 1px solid var(--border-medium);
     border-radius: var(--border-radius-lg);
     box-shadow: var(--shadow-panel);
-    backdrop-filter: blur(12px);
     --wizard-enter-x: 24px;
     animation: wizardPanelEnter 260ms ease-out;
 }
@@ -1725,7 +1716,7 @@ textarea {
     }
 }
 
-/* Animated background: blurred angled streaks behind the app (header and main content sit above at z-index 1-2). */
+/* Keep a few subtle animated streaks for atmosphere without the full-screen blur cost. */
 .bg-streaks {
     position: fixed;
     inset: 0;
@@ -1744,10 +1735,13 @@ textarea {
     height: var(--streak-thickness, 2px);
     border-radius: 999px;
     background: linear-gradient(90deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.85));
-    filter: blur(1.5px) drop-shadow(0 0 6px rgba(255, 255, 255, 0.65));
     opacity: 0;
     will-change: transform, opacity;
-    animation: streakZigzag 20s linear infinite;
+    animation: streakZigzag 32s linear infinite;
+}
+
+.bg-streaks span:nth-child(n + 4) {
+    display: none;
 }
 
 .bg-streaks span::before,
@@ -1780,36 +1774,36 @@ textarea {
 .bg-streaks span:nth-child(1) {
     --streak-length: 380px;
     --streak-thickness: 2px;
-    --streak-peak: 0.38;
+    --streak-peak: 0.2;
     --streak-bend-head: 58deg;
     --streak-bend-tail: 52deg;
     top: 4vh;
     left: -6vw;
-    animation-duration: 18s;
+    animation-duration: 32s;
     animation-delay: 0s;
 }
 
 .bg-streaks span:nth-child(2) {
     --streak-length: 280px;
     --streak-thickness: 3px;
-    --streak-peak: 0.3;
+    --streak-peak: 0.18;
     --streak-bend-head: 66deg;
     --streak-bend-tail: 48deg;
     top: 18vh;
     left: -14vw;
-    animation-duration: 24s;
+    animation-duration: 40s;
     animation-delay: -6s;
 }
 
 .bg-streaks span:nth-child(3) {
     --streak-length: 520px;
     --streak-thickness: 2px;
-    --streak-peak: 0.34;
+    --streak-peak: 0.2;
     --streak-bend-head: 50deg;
     --streak-bend-tail: 62deg;
     top: -8vh;
     left: 6vw;
-    animation-duration: 28s;
+    animation-duration: 44s;
     animation-delay: -14s;
 }
 
