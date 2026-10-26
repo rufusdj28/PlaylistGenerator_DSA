@@ -6,7 +6,7 @@
     <meta name="description" content="GenMix is a music catalog and playlist organizer built with data structures and algorithms.">
     <title>GenMix</title>
     <!-- Bump the version query after style changes so browsers do not reuse a cached stylesheet. -->
-    <link rel="stylesheet" href="css/styles.css?v=11">
+    <link rel="stylesheet" href="css/styles.css?v=14">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Unbounded:wght@600;700;800&display=swap">
@@ -26,25 +26,11 @@
         <span></span>
     </div>
 
-    <!-- Keep the menu button outside the content that blurs when the menu opens. -->
-    <button
-        id="menuToggle"
-        class="menu-toggle"
-        type="button"
-        aria-label="Open menu"
-        aria-expanded="false"
-        aria-controls="mainMenu"
-    >
-        <span class="hamburger-icon" aria-hidden="true">
-            <span></span>
-            <span></span>
-            <span></span>
-        </span>
-    </button>
-
     <!-- Keep the brand and catalog search visible in the page header. -->
     <header id="appHeader" class="top-bar">
-        <span class="header-wordmark gradient-text">GenMix</span>
+        <h1 class="header-wordmark" aria-label="GenMix">
+            <span class="wordmark-gen">Gen</span><span class="wordmark-mix" aria-hidden="true"><span>M</span><span>i</span><span>x</span></span>
+        </h1>
         <div class="search-container">
             <button class="search-btn" type="button" aria-label="Search songs">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -62,34 +48,31 @@
         </button>
     </header>
 
-    <!-- The overlay receives outside clicks; the menu remains above it. -->
-    <button id="menuOverlay" class="menu-overlay" type="button" aria-label="Close menu" aria-hidden="true" tabindex="-1"></button>
-
-    <!-- The navigation panel stays mounted so its slide transition can finish. -->
-    <aside id="mainMenu" class="menu-panel" aria-label="Main menu" aria-hidden="true" inert>
+    <!-- Floating icon navigation stays available throughout the app. -->
+    <aside id="mainMenu" class="menu-panel" aria-label="Main menu">
         <nav class="sidebar-nav" aria-label="Primary navigation">
-            <a href="#homeSection" class="nav-item active" data-section="home" aria-current="page">
+            <a href="#homeSection" class="nav-item active" data-section="home" aria-current="page" aria-label="Home">
                 <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="m3 10 9-7 9 7"></path>
                     <path d="M5.5 9v11h13V9M9.5 20v-6h5v6"></path>
                 </svg>
                 <span class="nav-text">Home</span>
             </a>
-            <a href="#searchSection" class="nav-item" data-section="search">
+            <a href="#searchSection" class="nav-item" data-section="search" aria-label="Search">
                 <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
                     <circle cx="10.8" cy="10.8" r="6.6"></circle>
                     <path d="m16 16 4.5 4.5"></path>
                 </svg>
                 <span class="nav-text">Search</span>
             </a>
-            <a href="#librarySection" class="nav-item" data-section="library">
+            <a href="#librarySection" class="nav-item" data-section="library" aria-label="Library">
                 <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M4 4.5h12.5v15H4zM8 4.5V3h12v15h-3.5"></path>
                     <path d="M7 8h6.5M7 11h6.5M7 14h4.5"></path>
                 </svg>
                 <span class="nav-text">Library</span>
             </a>
-            <a href="#generatorSection" class="nav-item" data-section="generator">
+            <a href="#generatorSection" class="nav-item" data-section="generator" aria-label="Generate">
                 <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M12 3v3M12 18v3M3 12h3M18 12h3"></path>
                     <path d="m7.2 7.2 2.1 2.1m5.4 5.4 2.1 2.1m0-9.6-2.1 2.1m-5.4 5.4-2.1 2.1"></path>
@@ -107,36 +90,39 @@
             <!-- Home Section -->
             <section id="homeSection" class="content-section active">
                 <div class="home-sections">
-                    <section class="dashboard-section" aria-labelledby="recommendationsHeading">
-                        <div class="dashboard-section-header">
-                            <h1 id="recommendationsHeading">Top Recommendations</h1>
-                            <button id="refreshRecommendationsButton" class="btn-secondary" type="button">
-                                Refresh
-                            </button>
+                    <section class="dashboard-section recommendations-dashboard" aria-labelledby="recommendationsHeading">
+                        <aside class="music-quote-panel" aria-label="Music quotes">
+                            <p class="music-quote-eyebrow">A little inspiration</p>
+                            <div id="musicQuoteCopy">
+                                <blockquote id="musicQuote" class="music-quote" aria-live="off"></blockquote>
+                                <p id="musicQuoteAuthor" class="music-quote-author"></p>
+                            </div>
+                        </aside>
+                        <div class="recommendation-content">
+                            <div class="dashboard-section-header">
+                                <h1 id="recommendationsHeading">Top Recommendations</h1>
+                                <button id="refreshRecommendationsButton" class="btn-secondary" type="button">
+                                    Refresh
+                                </button>
+                            </div>
+                            <div id="recommendationsDisplay" class="recommendation-grid"></div>
+                            <section id="recommendationSongMenu" class="recommendation-song-menu" aria-labelledby="recommendationSongHeading" aria-live="polite" hidden>
+                                <div class="recommendation-song-menu-header">
+                                    <div>
+                                        <h2 id="recommendationSongHeading"></h2>
+                                        <p id="recommendationSongArtist" class="recommendation-artist"></p>
+                                    </div>
+                                    <button id="recommendationSongMenuClose" class="btn-secondary btn-small" type="button">Close</button>
+                                </div>
+                                <div id="recommendationSongMenuContent"></div>
+                            </section>
                         </div>
-                        <div id="recommendationsDisplay" class="recommendation-grid"></div>
                     </section>
 
                     <section class="dashboard-section" aria-labelledby="homePlaylistsHeading">
                         <h2 id="homePlaylistsHeading">Your Playlists</h2>
-                        <div class="playlist-save-controls">
-                            <label for="playlistNameInput">Save current queue</label>
-                            <div class="playlist-save-form">
-                                <input
-                                    id="playlistNameInput"
-                                    class="playlist-name-input"
-                                    type="text"
-                                    maxlength="80"
-                                    placeholder="Enter a playlist name"
-                                    autocomplete="off"
-                                >
-                                <button id="saveQueuePlaylistButton" class="btn-primary" type="button" disabled>
-                                    Save playlist
-                                </button>
-                            </div>
-                            <p class="queue-info" id="queueStatus" role="status">Queue: Empty</p>
-                        </div>
-                        <div id="homePlaylistsDisplay" class="playlist-grid"></div>
+                        <p class="queue-info home-queue-status" id="queueStatus" role="status">Queue: Empty</p>
+                        <div id="homePlaylistsDisplay" class="playlist-grid home-playlists-grid"></div>
                     </section>
                 </div>
             </section>

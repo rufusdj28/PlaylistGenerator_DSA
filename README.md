@@ -242,13 +242,14 @@ Run generator, UI helper, and wizard helper tests with `node tests/playlistGener
 
 #### Adding Songs to the Playlist
 1. Search the existing catalog by title
-2. Click a matching result to add it to the current playlist
+2. Browse matching songs two rows at a time with the smooth Previous/Next pagination
+3. Click a matching result to add it to the current playlist
 
 #### Saving and Viewing Playlists
-1. Add one or more songs to the queue from Search
-2. On Home, enter a playlist name and choose **Save playlist**
-3. Saved playlist snapshots are stored under `genmixSavedPlaylists` in this browser's localStorage
-4. Home and Library display saved playlists and their song counts; generated results remain separate and unsaved
+1. Save generated playlists to Library from the generator results
+2. Add recommendations to an existing playlist from Home, or add catalog songs from a playlist's Library detail page
+3. Saved playlists are stored under `genmixSavedPlaylists` in this browser's localStorage
+4. Home and Library display saved playlists and their song counts
 
 #### Generating Playlists
 1. Open **Generate** from the navigation menu
@@ -273,10 +274,11 @@ OAuth tokens stay in memory only. Accepted song-to-video matches are cached sepa
 1. Use the existing play/pause control to start or pause the queue simulation
 2. Use Next or Previous to move through the circular queue
 3. No real audio is played
-4. Save the current queue from Home to keep a named snapshot in this browser
+4. The queue is temporary; save generated playlists to Library to keep them in this browser
 
 #### Recommendations
-- Home samples up to 12 distinct songs from the cached CSV catalog index
+- Home pairs cycling music quotes with a carousel of up to 100 distinct songs, showing four columns and two rows at a time on desktop
+- Click a song to pause the carousel and add it to an existing saved playlist
 - Refresh or revisit Home for a new sample; recommendations do not alter the catalog or queue
 
 ---

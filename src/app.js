@@ -12,13 +12,25 @@ const playlist = new DSA.CircularQueue(100);
 const SAVED_PLAYLISTS_STORAGE_KEY = 'genmixSavedPlaylists';
 const SONG_CSV_FILE = 'songs_deduped.csv';
 const SONG_CSV_PATH = `data/${SONG_CSV_FILE}`;
-const RECOMMENDATION_COUNT = 12;
+const RECOMMENDATION_POOL_SIZE = 100;
 const LOADING_DURATION_MS = 2500;
 const GENERATION_SAFETY_TIMEOUT_MS = 10000;
 const SEARCH_DEBOUNCE_MS = 250;
 const SEARCH_STAGGER_LIMIT = 12;
+const SEARCH_RESULTS_COLUMNS_MAX = 4;
+const SEARCH_RESULT_CARD_MIN_WIDTH = 220;
+const SEARCH_RESULTS_GAP = 16;
 const UNDO_DURATION_MS = 5000;
 const PLAYLIST_ADD_SEARCH_LIMIT = 30;
+const MUSIC_QUOTES = [
+    { text: '“Music is a safe kind of high.”', author: 'Jimi Hendrix', emphasis: ['Music', 'high'] },
+    { text: '“Music is the shorthand of emotion.”', author: 'Leo Tolstoy', emphasis: ['Music', 'emotion'] },
+    { text: '“Music is love in search of a word.”', author: 'Sidney Lanier', emphasis: ['Music', 'love'] },
+    { text: '“The earth has music for those who listen.”', author: 'William Shakespeare', emphasis: ['music', 'listen'] },
+    { text: '“When I want to hear new music, I make it.”', author: 'Prince', emphasis: ['new music'] },
+    { text: '“Music is life, and life is not a business.”', author: 'Iggy Pop', emphasis: ['Music', 'life', 'business'] },
+    { text: '“A few of us who love what you do.”', author: 'Hussalonia', emphasis: ['love'] }
+];
 let searchDebounceTimer = null;
 let searchReturnSection = null;
 let openPlaylistId = null;
@@ -32,10 +44,13 @@ let generationRequestToken = 0;
 let generationInProgress = false;
 let loadingMessageInterval = null;
 let activeSection = 'home';
-let previousBodyOverflow = '';
 let catalogLoadMessage = `Song library is empty. Could not load ${SONG_CSV_FILE}.`;
 let youtubeAuth = null;
 let youtubeExportUI = null;
+let selectedRecommendationSong = null;
+let recommendationCarouselViewport = null;
+let musicQuoteTimer = null;
+let musicQuoteIndex = 0;
 const GENERATOR_SEARCH_LIMIT = 30;
 const GENERATOR_FEATURES = [
     ['danceability', 'Danceability'],
@@ -96,101 +111,6 @@ function compareRetrievalMethods(trackId) {
 }
 window.compareRetrievalMethods = compareRetrievalMethods;
 
-// Bind the menu toggle, outside-click close button, and keyboard controls.
-function setupMenu() {
-    document.getElementById('menuToggle').addEventListener('click', toggleMenu);
-    document.getElementById('menuOverlay').addEventListener('click', closeMenu);
-    document.addEventListener('keydown', handleMenuKeydown);
-}
-
-// Open the navigation panel, lock the page behind it, and move focus into it.
-function openMenu() {
-    const menu = document.getElementById('mainMenu');
-    const overlay = document.getElementById('menuOverlay');
-    const menuToggle = document.getElementById('menuToggle');
-
-    previousBodyOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    menu.inert = false;
-    menu.setAttribute('aria-hidden', 'false');
-    menu.classList.add('open');
-    overlay.setAttribute('aria-hidden', 'false');
-    overlay.classList.add('open');
-    menuToggle.setAttribute('aria-expanded', 'true');
-    menuToggle.setAttribute('aria-label', 'Close menu');
-    document.getElementById('appHeader').inert = true;
-    document.getElementById('mainContent').inert = true;
-    document.getElementById('mainContent').classList.add('menu-blurred');
-
-    const currentItem = menu.querySelector('[aria-current="page"]') || menu.querySelector('.nav-item');
-    if (currentItem) {
-        currentItem.focus();
-    }
-}
-
-// Close the menu, restore page scrolling, and return focus to the menu button.
-function closeMenu() {
-    const menu = document.getElementById('mainMenu');
-    if (!menu.classList.contains('open')) {
-        return;
-    }
-
-    const menuToggle = document.getElementById('menuToggle');
-    menu.classList.remove('open');
-    menu.inert = true;
-    menu.setAttribute('aria-hidden', 'true');
-    const overlay = document.getElementById('menuOverlay');
-    overlay.classList.remove('open');
-    overlay.setAttribute('aria-hidden', 'true');
-    menuToggle.setAttribute('aria-expanded', 'false');
-    menuToggle.setAttribute('aria-label', 'Open menu');
-    document.getElementById('appHeader').inert = false;
-    document.getElementById('mainContent').inert = false;
-    document.getElementById('mainContent').classList.remove('menu-blurred');
-    document.body.style.overflow = previousBodyOverflow;
-    menuToggle.focus();
-}
-
-// Toggle the menu based on its current expanded state.
-function toggleMenu() {
-    const menuToggle = document.getElementById('menuToggle');
-    if (menuToggle.getAttribute('aria-expanded') === 'true') {
-        closeMenu();
-    } else {
-        openMenu();
-    }
-}
-
-// Close on Escape and keep keyboard focus within the open navigation menu.
-function handleMenuKeydown(event) {
-    const menu = document.getElementById('mainMenu');
-    if (!menu.classList.contains('open')) {
-        return;
-    }
-    if (event.key === 'Escape') {
-        event.preventDefault();
-        closeMenu();
-        return;
-    }
-    if (event.key !== 'Tab') {
-        return;
-    }
-
-    const menuItems = menu.querySelectorAll('.nav-item');
-    if (menuItems.length === 0) {
-        return;
-    }
-    const firstItem = menuItems[0];
-    const lastItem = menuItems[menuItems.length - 1];
-    if (event.shiftKey && document.activeElement === firstItem) {
-        event.preventDefault();
-        lastItem.focus();
-    } else if (!event.shiftKey && document.activeElement === lastItem) {
-        event.preventDefault();
-        firstItem.focus();
-    }
-}
-
 // Navigation
 function setupNavigation() {
     const navItems = document.querySelectorAll('.nav-item');
@@ -199,7 +119,6 @@ function setupNavigation() {
             e.preventDefault();
             const section = item.getAttribute('data-section');
             switchSection(section);
-            closeMenu();
         });
     });
 }
@@ -235,6 +154,7 @@ function switchSection(section, options = {}) {
             renderWizardStep(wizardState.step);
             break;
     }
+    document.body.classList.toggle('home-fixed-view', section === 'home');
     activeSection = section;
 
     // The playlist detail view belongs to the Library menu item.
@@ -308,9 +228,66 @@ function setupPlaylistGeneratorUI() {
     renderWizardStep(wizardState.step);
 }
 
-// Bind the existing queue-save and Home recommendation controls.
-function setupPlaylistSavingUI() {
-    document.getElementById('saveQueuePlaylistButton').addEventListener('click', saveCurrentQueue);
+// Bind the selected-song menu controls once.
+function setupRecommendationUI() {
+    document.getElementById('recommendationSongMenuClose').addEventListener('click', closeRecommendationSongMenu);
+    renderMusicQuote();
+    const reducedMotion = window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!reducedMotion) {
+        musicQuoteTimer = setInterval(() => {
+            showNextMusicQuote();
+        }, 7200);
+    }
+}
+
+// Slide to the next quote, then update the hidden quote content.
+function showNextMusicQuote() {
+    const panel = document.querySelector('.music-quote-panel');
+    if (!panel) {
+        musicQuoteIndex = (musicQuoteIndex + 1) % MUSIC_QUOTES.length;
+        renderMusicQuote();
+        return;
+    }
+    panel.classList.add('is-sliding');
+    panel.addEventListener('animationend', (event) => {
+        if (event.target !== document.getElementById('musicQuoteCopy')) {
+            return;
+        }
+        musicQuoteIndex = (musicQuoteIndex + 1) % MUSIC_QUOTES.length;
+        renderMusicQuote();
+        panel.classList.remove('is-sliding');
+        panel.classList.add('is-entering');
+        panel.addEventListener('animationend', (entryEvent) => {
+            if (entryEvent.target !== document.getElementById('musicQuoteCopy')) {
+                return;
+            }
+            panel.classList.remove('is-entering');
+        }, { once: true });
+    }, { once: true });
+}
+
+// Render a quote with selected words emphasized without injecting HTML.
+function renderMusicQuote() {
+    const quote = MUSIC_QUOTES[musicQuoteIndex];
+    const quoteElement = document.getElementById('musicQuote');
+    quoteElement.replaceChildren();
+    const expression = new RegExp(
+        quote.emphasis.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'),
+        'gi'
+    );
+    let lastIndex = 0;
+    quote.text.replace(expression, (match, offset) => {
+        quoteElement.appendChild(document.createTextNode(quote.text.slice(lastIndex, offset)));
+        const emphasized = document.createElement('span');
+        emphasized.className = 'music-quote-highlight';
+        emphasized.textContent = match;
+        quoteElement.appendChild(emphasized);
+        lastIndex = offset + match.length;
+        return match;
+    });
+    quoteElement.appendChild(document.createTextNode(quote.text.slice(lastIndex)));
+    document.getElementById('musicQuoteAuthor').textContent = `— ${quote.author}`;
 }
 
 // Build the optional browser-only YouTube integration without blocking the core app.
@@ -879,7 +856,7 @@ function handleGlobalSearch(rawQuery) {
 }
 
 // Search song titles using the B-Tree's compatibility scan and render animated cards.
-function renderSearchResults(query) {
+function renderSearchResults(query, page = 0, direction = 'next') {
     const searchResults = document.getElementById('searchResults');
     searchResults.replaceChildren();
 
@@ -898,9 +875,20 @@ function renderSearchResults(query) {
         return;
     }
 
+    const availableWidth = searchResults.clientWidth;
+    const columns = availableWidth > 0
+        ? Math.max(1, Math.min(
+            SEARCH_RESULTS_COLUMNS_MAX,
+            Math.floor((availableWidth + SEARCH_RESULTS_GAP) / (SEARCH_RESULT_CARD_MIN_WIDTH + SEARCH_RESULTS_GAP))
+        ))
+        : SEARCH_RESULTS_COLUMNS_MAX;
+    const pageSize = columns * 2;
+    const pageCount = Math.ceil(results.length / pageSize);
+    const currentPage = Math.min(Math.max(page, 0), pageCount - 1);
     const grid = document.createElement('div');
     grid.className = 'search-results-grid';
-    results.forEach((song, index) => {
+    grid.classList.add(direction === 'previous' ? 'search-page-enter-from-left' : 'search-page-enter-from-right');
+    results.slice(currentPage * pageSize, (currentPage + 1) * pageSize).forEach((song, index) => {
         const card = document.createElement('article');
         card.className = 'search-result-card';
         // Only the first cards are staggered so long result lists still appear quickly.
@@ -931,6 +919,42 @@ function renderSearchResults(query) {
         grid.appendChild(card);
     });
     searchResults.appendChild(grid);
+
+    if (pageCount > 1) {
+        const pagination = document.createElement('nav');
+        pagination.className = 'search-pagination';
+        pagination.setAttribute('aria-label', 'Search result pages');
+
+        const previousButton = document.createElement('button');
+        previousButton.className = 'btn-secondary btn-small';
+        previousButton.type = 'button';
+        previousButton.textContent = 'Previous';
+        previousButton.disabled = currentPage === 0;
+        previousButton.addEventListener('click', () => {
+            renderSearchResults(query, currentPage - 1, 'previous');
+        });
+
+        const pageStatus = document.createElement('p');
+        pageStatus.className = 'search-pagination-status';
+        pageStatus.setAttribute('aria-live', 'polite');
+        const firstResult = currentPage * pageSize + 1;
+        const lastResult = Math.min((currentPage + 1) * pageSize, results.length);
+        pageStatus.textContent = `${firstResult}–${lastResult} of ${results.length} songs · Page ${currentPage + 1} of ${pageCount}`;
+
+        const nextButton = document.createElement('button');
+        nextButton.className = 'btn-primary btn-small';
+        nextButton.type = 'button';
+        nextButton.textContent = 'Next';
+        nextButton.disabled = currentPage === pageCount - 1;
+        nextButton.addEventListener('click', () => {
+            renderSearchResults(query, currentPage + 1, 'next');
+        });
+
+        pagination.appendChild(previousButton);
+        pagination.appendChild(pageStatus);
+        pagination.appendChild(nextButton);
+        searchResults.appendChild(pagination);
+    }
 }
 
 // Return the shared rounded music-note icon markup used on every song row and card.
@@ -1101,6 +1125,9 @@ function renderPlaylistCard(savedPlaylist, openable = false) {
 function renderSavedPlaylistCards(container, openable = false) {
     const savedPlaylists = readSavedPlaylists();
     container.replaceChildren();
+    if (container.id === 'homePlaylistsDisplay') {
+        container.classList.remove('is-empty');
+    }
     if (savedPlaylists === null) {
         const message = document.createElement('p');
         message.className = 'empty-state saved-playlist-error';
@@ -1109,6 +1136,9 @@ function renderSavedPlaylistCards(container, openable = false) {
         return;
     }
     if (savedPlaylists.length === 0) {
+        if (container.id === 'homePlaylistsDisplay') {
+            container.classList.add('is-empty');
+        }
         const emptyState = document.createElement('div');
         emptyState.className = 'playlist-empty-state';
 
@@ -1134,6 +1164,10 @@ function renderSavedPlaylistCards(container, openable = false) {
 // Render a fresh sample from the cached B-Tree index without changing catalog data.
 function renderRecommendations() {
     const recommendationsDisplay = document.getElementById('recommendationsDisplay');
+    if (!document.getElementById('recommendationSongMenu').hidden) {
+        closeRecommendationSongMenu();
+    }
+    recommendationCarouselViewport = null;
     recommendationsDisplay.replaceChildren();
     if (catalogSongs.length === 0) {
         const message = document.createElement('p');
@@ -1143,9 +1177,28 @@ function renderRecommendations() {
         return;
     }
 
-    PlaylistUI.sampleSongs(catalogSongs, RECOMMENDATION_COUNT).forEach((song) => {
+    const track = document.createElement('div');
+    track.className = 'recommendation-track';
+    const songGroups = [document.createElement('div'), document.createElement('div')];
+    songGroups[0].className = 'recommendation-track-group';
+    songGroups[1].className = 'recommendation-track-group';
+    songGroups[1].setAttribute('aria-hidden', 'true');
+    songGroups[1].inert = true;
+    const recommendations = PlaylistUI.sampleSongs(catalogSongs, RECOMMENDATION_POOL_SIZE);
+
+    const createCard = (song) => {
         const card = document.createElement('article');
         card.className = 'recommendation-song-card';
+        card.setAttribute('role', 'button');
+        card.setAttribute('tabindex', '0');
+        card.setAttribute('aria-label', `Options for ${song.title || song.track_name || 'Untitled'}`);
+        card.addEventListener('click', () => openRecommendationSongMenu(song, viewport));
+        card.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                openRecommendationSongMenu(song, viewport);
+            }
+        });
 
         const title = document.createElement('h3');
         title.className = 'recommendation-title';
@@ -1156,14 +1209,143 @@ function renderRecommendations() {
         artist.className = 'recommendation-artist';
         artist.textContent = song.artists || song.artist || 'Unknown artist';
         card.appendChild(artist);
-
         const genre = document.createElement('p');
         genre.className = 'recommendation-genre';
         genre.textContent = song.track_genre || 'Genre not available';
         card.appendChild(genre);
         prependMusicNoteTile(card);
-        recommendationsDisplay.appendChild(card);
+        return card;
+    };
+
+    songGroups.forEach((group) => {
+        recommendations.forEach((song, index) => {
+            let column = group.children[group.children.length - 1];
+            if (index % 2 === 0) {
+                column = document.createElement('div');
+                column.className = 'recommendation-column';
+                group.appendChild(column);
+            }
+            column.appendChild(createCard(song));
+        });
     });
+    songGroups.forEach((group) => track.appendChild(group));
+
+    const viewport = document.createElement('div');
+    viewport.className = 'recommendation-carousel-viewport';
+    viewport.setAttribute('role', 'region');
+    viewport.setAttribute('aria-label', 'Song recommendations');
+    viewport.appendChild(track);
+    recommendationCarouselViewport = viewport;
+    recommendationsDisplay.appendChild(viewport);
+}
+
+// Pause the carousel and show the selected song's available action.
+function openRecommendationSongMenu(song, viewport) {
+    selectedRecommendationSong = song;
+    viewport.classList.add('is-paused');
+    document.getElementById('recommendationSongHeading').textContent = song.title || song.track_name || 'Untitled';
+    document.getElementById('recommendationSongArtist').textContent = song.artists || song.artist || 'Unknown artist';
+    const content = document.getElementById('recommendationSongMenuContent');
+    content.replaceChildren();
+    const addButton = document.createElement('button');
+    addButton.id = 'recommendationSongAddButton';
+    addButton.className = 'btn-primary';
+    addButton.type = 'button';
+    addButton.textContent = 'Add to playlist';
+    addButton.addEventListener('click', showRecommendationPlaylists);
+    content.appendChild(addButton);
+    document.getElementById('recommendationSongMenu').hidden = false;
+    document.getElementById('recommendationSongMenuClose').focus();
+}
+
+// Show the saved playlists available for the selected song.
+function showRecommendationPlaylists() {
+    const content = document.getElementById('recommendationSongMenuContent');
+    content.replaceChildren();
+    const heading = document.createElement('h3');
+    heading.textContent = 'Choose a playlist';
+    content.appendChild(heading);
+    const savedPlaylists = readSavedPlaylists();
+    if (savedPlaylists === null) {
+        const errorMessage = document.createElement('p');
+        errorMessage.className = 'empty-state';
+        errorMessage.textContent = 'Saved playlists could not be loaded from this browser.';
+        content.appendChild(errorMessage);
+        return;
+    }
+    if (savedPlaylists.length === 0) {
+        const emptyMessage = document.createElement('p');
+        emptyMessage.className = 'empty-state';
+        emptyMessage.textContent = 'No playlists yet. Create a playlist or save your queue, then come back to add this song.';
+        content.appendChild(emptyMessage);
+        return;
+    }
+
+    const choices = document.createElement('div');
+    choices.className = 'recommendation-playlist-choices';
+    savedPlaylists.forEach((savedPlaylist) => {
+        const button = document.createElement('button');
+        button.className = 'btn-secondary recommendation-playlist-choice';
+        button.type = 'button';
+        button.textContent = `${savedPlaylist.name} · ${savedPlaylist.songs.length} song${savedPlaylist.songs.length === 1 ? '' : 's'}`;
+        button.addEventListener('click', () => addRecommendationToPlaylist(savedPlaylist.id));
+        choices.appendChild(button);
+    });
+    content.appendChild(choices);
+}
+
+// Add the selected song to one saved playlist without allowing duplicates.
+function addRecommendationToPlaylist(playlistId) {
+    if (!selectedRecommendationSong) {
+        return;
+    }
+    const savedPlaylists = readSavedPlaylists();
+    if (savedPlaylists === null) {
+        showRecommendationSongMessage('Saved playlists could not be accessed.');
+        return;
+    }
+    const savedPlaylist = savedPlaylists.find((playlistItem) => playlistItem.id === playlistId);
+    if (!savedPlaylist) {
+        showRecommendationSongMessage('That playlist no longer exists. Refresh and try again.');
+        return;
+    }
+    const result = PlaylistEditor.addSong(savedPlaylist, selectedRecommendationSong);
+    if (!result.ok) {
+        showRecommendationSongMessage(
+            result.error === 'duplicate'
+                ? `“${selectedRecommendationSong.title || selectedRecommendationSong.track_name || 'This song'}” is already in “${savedPlaylist.name}”.`
+                : 'This song could not be added to the playlist.'
+        );
+        return;
+    }
+    const outcome = updateSavedPlaylist(result.playlist);
+    if (!outcome.success) {
+        showRecommendationSongMessage(outcome.message);
+        return;
+    }
+    renderSavedPlaylistCards(document.getElementById('homePlaylistsDisplay'));
+    updateLibraryDisplay();
+    showRecommendationSongMessage(`Added to “${savedPlaylist.name}”.`);
+}
+
+// Replace the song menu action with a status message.
+function showRecommendationSongMessage(message) {
+    const content = document.getElementById('recommendationSongMenuContent');
+    content.replaceChildren();
+    const status = document.createElement('p');
+    status.className = 'wizard-message';
+    status.setAttribute('role', 'status');
+    status.textContent = message;
+    content.appendChild(status);
+}
+
+// Resume the carousel when the selected-song menu is dismissed.
+function closeRecommendationSongMenu() {
+    if (recommendationCarouselViewport) {
+        recommendationCarouselViewport.classList.remove('is-paused');
+    }
+    selectedRecommendationSong = null;
+    document.getElementById('recommendationSongMenu').hidden = true;
 }
 
 // Refresh both Home sections from their current sources.
@@ -1766,10 +1948,8 @@ function clearPlaylist() {
 function updateQueueStatus() {
     const queueStatus = document.getElementById('queueStatus');
     const size = playlist.size;
-    queueStatus.textContent = `Queue: ${size} song${size !== 1 ? 's' : ''}`;
-    const saveButton = document.getElementById('saveQueuePlaylistButton');
-    if (saveButton) {
-        saveButton.disabled = size === 0;
+    if (queueStatus) {
+        queueStatus.textContent = `Queue: ${size} song${size !== 1 ? 's' : ''}`;
     }
 }
 
@@ -1862,9 +2042,8 @@ document.addEventListener('DOMContentLoaded', () => {
     updateLibraryDisplay();
     updateQueueStatus();
     const csvLoadPromise = loadCSVSongs();
-    setupMenu();
     setupNavigation();
-    setupPlaylistSavingUI();
+    setupRecommendationUI();
     setupYouTubeExportUI();
     setupPlaylistGeneratorUI();
     setupPlaylistDetailUI();

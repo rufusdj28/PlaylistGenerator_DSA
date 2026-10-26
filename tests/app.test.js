@@ -40,12 +40,17 @@ async function runTest(name, test) {
 // Provide the small DOM surface app.js needs without introducing a browser dependency.
 class FakeElement {
     constructor() {
+        this.id = '';
         this.innerHTML = '';
         this.textContent = '';
         this.value = '';
         this.firstChild = null;
         this.children = [];
-        this.style = {};
+        this.style = {
+            setProperty(name, value) {
+                this[name] = value;
+            }
+        };
         this.hidden = false;
         this.disabled = false;
         this.checked = false;
@@ -147,9 +152,16 @@ function createApp(fetchImplementation, localStorage = createMemoryStorage()) {
         createElement() {
             return new FakeElement();
         },
+        createTextNode(text) {
+            const node = new FakeElement();
+            node.textContent = text;
+            return node;
+        },
         getElementById(id) {
             if (!elements.has(id)) {
-                elements.set(id, new FakeElement());
+                const element = new FakeElement();
+                element.id = id;
+                elements.set(id, element);
             }
             return elements.get(id);
         },
@@ -288,6 +300,10 @@ async function main() {
             'Empty CSV should explain why generation is unavailable'
         );
         assert(app.loggedWarnings.some((message) => message.includes('No usable songs')), 'Empty CSV cause should be logged');
+        assert(
+            app.elements.get('homePlaylistsDisplay').classList.contains('is-empty'),
+            'The empty Home playlist state should receive its compact centered layout'
+        );
         const createButton = app.elements.get('homePlaylistsDisplay').children[0].children[1];
         createButton.click();
         assert(
@@ -331,6 +347,106 @@ async function main() {
         verifyEmptyQueueControls(app);
     });
 
+    await runTest('recommendation song menu pauses carousel and adds songs to saved playlists', async () => {
+        const csvText = fs.readFileSync(path.join(__dirname, '..', 'data', 'songs_deduped.csv'), 'utf8');
+        const storage = createMemoryStorage();
+        const app = createApp(async () => csvResponse(csvText), storage);
+        await app.startup();
+
+        assert(
+            app.elements.get('musicQuote').children.some((part) => part.className === 'music-quote-highlight'),
+            'The rotating quote should render key words with a dedicated highlight'
+        );
+        assert(
+            app.elements.get('musicQuoteAuthor').textContent.startsWith('— '),
+            'The quote should include its credited author'
+        );
+        const viewport = app.elements.get('recommendationsDisplay').children[0];
+        const track = viewport.children[0];
+        const songCard = track.children[0].children[0].children[0];
+        songCard.click();
+        assert(viewport.classList.contains('is-paused'), 'Selecting a song should pause carousel animation');
+        assert(!app.elements.get('recommendationSongMenu').hidden, 'Selecting a song should open its action menu');
+        const menuContent = app.elements.get('recommendationSongMenuContent');
+        menuContent.children[0].click();
+        assert(
+            menuContent.children[1].textContent.includes('No playlists yet'),
+            'The playlist selection phase should explain when no saved playlists exist'
+        );
+        app.elements.get('recommendationSongMenuClose').click();
+        assert(!viewport.classList.contains('is-paused'), 'Closing the song menu should resume the carousel');
+
+        storage.setItem('genmixSavedPlaylists', JSON.stringify([{
+            id: 'favorites',
+            name: 'Favorites',
+            createdAt: new Date().toISOString(),
+            songs: []
+        }]));
+        songCard.click();
+        menuContent.children[0].click();
+        const playlistChoice = menuContent.children[1].children[0];
+        playlistChoice.click();
+
+        const savedPlaylist = JSON.parse(storage.getItem('genmixSavedPlaylists'))[0];
+        assertEqual(savedPlaylist.songs.length, 1, 'Selecting a playlist should persist the recommended song');
+        assert(savedPlaylist.songs[0].track_id, 'The saved entry should retain its catalog track ID');
+        assert(
+            menuContent.children[0].textContent.includes('Added to'),
+            'The song menu should confirm a successful addition'
+        );
+
+        menuContent.children[0].click();
+        songCard.click();
+        menuContent.children[0].click();
+        menuContent.children[1].children[0].click();
+        assertEqual(
+            JSON.parse(storage.getItem('genmixSavedPlaylists'))[0].songs.length,
+            1,
+            'Adding a song already in the playlist should not create a duplicate'
+        );
+        assert(
+            menuContent.children[0].textContent.includes('already in'),
+            'The song menu should explain duplicate additions'
+        );
+    });
+
+    await runTest('song search paginates results in two-row pages with smooth navigation', async () => {
+        const csvText = fs.readFileSync(path.join(__dirname, '..', 'data', 'songs_deduped.csv'), 'utf8');
+        const app = createApp(async () => csvResponse(csvText));
+        await app.startup();
+
+        app.context.renderSearchResults('a');
+        const results = app.elements.get('searchResults');
+        const firstPageGrid = results.children[0];
+        const firstPageTitles = firstPageGrid.children.map((card) => card.children[0].textContent);
+        assert(firstPageTitles.length > 0, 'A broad query should return matching songs');
+        assert(firstPageTitles.length <= 8, 'At the default four-column layout, each page should show at most two rows');
+        assert(
+            firstPageGrid.classList.contains('search-page-enter-from-right'),
+            'New searches should animate in from the right'
+        );
+        assertEqual(results.children[1].children[2].textContent, 'Next', 'Search pagination should provide a Next button');
+        results.children[1].children[2].click();
+
+        const secondPageGrid = results.children[0];
+        const secondPageTitles = secondPageGrid.children.map((card) => card.children[0].textContent);
+        assert(secondPageTitles.length > 0 && secondPageTitles.length <= 8, 'The next page should remain limited to two rows');
+        assert(
+            !firstPageTitles.some((title) => secondPageTitles.includes(title)),
+            'The next page should show songs not present on the prior page'
+        );
+        assert(
+            secondPageGrid.classList.contains('search-page-enter-from-right'),
+            'Next-page navigation should slide in from the right'
+        );
+        results.children[1].children[0].click();
+        assertEqual(
+            results.children[0].classList.contains('search-page-enter-from-left'),
+            true,
+            'Previous-page navigation should slide in from the left'
+        );
+    });
+
     await runTest('real CSV startup contains only source records and preserves legitimate title collisions', async () => {
         const csvText = fs.readFileSync(path.join(__dirname, '..', 'data', 'songs_deduped.csv'), 'utf8');
         const app = createApp(async () => csvResponse(csvText));
@@ -366,11 +482,17 @@ async function main() {
             MOOD_NAMES,
             'Mood radio options should use only the generator-exported mood keys'
         );
+        const carousel = app.elements.get('recommendationsDisplay').children[0];
+        const carouselTrack = carousel.children[0];
+        const originalSongColumns = carouselTrack.children[0].children;
+        assertEqual(carousel.getAttribute('role'), 'region', 'Recommendations should be an accessible region');
+        assertEqual(originalSongColumns.length, 50, 'The carousel should contain 50 columns of two songs');
         assertEqual(
-            app.elements.get('recommendationsDisplay').children.length,
-            12,
-            'Home should display twelve recommendations from the loaded catalog'
+            originalSongColumns.reduce((count, column) => count + column.children.length, 0),
+            100,
+            'The carousel should cycle through 100 distinct catalog songs'
         );
+        assertEqual(carouselTrack.children[1].getAttribute('aria-hidden'), 'true', 'The loop copy should be hidden from assistive technology');
         assert(
             app.evaluate('catalogSongs === songIndex.songs'),
             'Home should reuse the sorted catalog snapshot rather than rebuild it'
@@ -473,6 +595,10 @@ async function main() {
         const app = createApp(async () => csvResponse(csvText), storage);
         await app.startup();
 
+        assert(
+            app.context.document.body.classList.contains('home-fixed-view'),
+            'Home should use the fixed viewport layout'
+        );
         const song = app.evaluate('songCatalog.inorderTraversal()[0]');
         app.context.addSongToPlaylist(song.track_id);
         app.context.document.getElementById('playlistNameInput').value = 'Evening Mix';
@@ -487,6 +613,10 @@ async function main() {
             'Evening Mix',
             'Home should render the saved playlist name as text'
         );
+        assert(
+            !app.elements.get('homePlaylistsDisplay').classList.contains('is-empty'),
+            'Home should remove its empty-state layout when playlists exist'
+        );
         assertEqual(
             app.elements.get('homePlaylistsDisplay').children[0].children[1].textContent,
             '1 song',
@@ -496,6 +626,10 @@ async function main() {
         const reloadedApp = createApp(async () => csvResponse(csvText), storage);
         await reloadedApp.startup();
         reloadedApp.context.switchSection('library');
+        assert(
+            !reloadedApp.context.document.body.classList.contains('home-fixed-view'),
+            'Non-Home sections should retain their normal scrolling layout'
+        );
         assertEqual(
             reloadedApp.elements.get('libraryDisplay').children.length,
             1,

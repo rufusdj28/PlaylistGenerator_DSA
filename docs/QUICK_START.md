@@ -42,14 +42,13 @@ YouTube export needs a Google OAuth Web client ID; it cannot work until you crea
 - Library lists saved playlists, not catalog songs
 
 ### 2. Generate a Playlist
-- Open Generate from the hamburger menu
+- Open Generate from the floating navigation menu
 - Choose **Create Playlist** and enter a name
 - Pick a song by title/artist or select one of the exported moods
 - Review the result, then save it to Library or discard it
 
 ### Save a Playlist
-- Add songs to the queue from Search
-- On Home, enter a name under "Save current queue" and choose "Save playlist"
+- Generate a playlist and choose Save to Library from the results
 - Saved playlists are stored in this browser and appear on Home and in Library
 
 ### 3. Navigate the Simulated Queue
