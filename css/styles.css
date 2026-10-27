@@ -538,9 +538,10 @@ body.home-fixed-view #homeSection .home-sections {
 
 .recommendations-dashboard {
     display: grid;
-    grid-template-columns: minmax(190px, 0.8fr) minmax(0, 1.7fr);
-    align-items: center;
-    gap: 28px;
+    grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.7fr);
+    align-items: start;
+    gap: 24px;
+    overflow: hidden;
 }
 
 body.home-fixed-view .recommendations-dashboard {
@@ -613,7 +614,9 @@ body.home-fixed-view .recommendations-dashboard {
 }
 
 .recommendation-content {
+    position: relative;
     min-width: 0;
+    overflow: hidden;
 }
 
 .dashboard-section {
@@ -637,6 +640,12 @@ body.home-fixed-view .recommendations-dashboard {
     justify-content: space-between;
     gap: 16px;
     margin-bottom: 20px;
+}
+
+.dashboard-section-header h1,
+.dashboard-section-header h2 {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .playlist-grid {
@@ -679,8 +688,24 @@ body.home-fixed-view .recommendations-dashboard {
 
 .recommendation-carousel-viewport {
     width: 100%;
+    min-width: 0;
     overflow: hidden;
+    transition: opacity 260ms ease, transform 260ms ease;
     container-type: inline-size;
+    -webkit-mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        black 8%,
+        black 92%,
+        transparent 100%
+    );
+    mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        black 8%,
+        black 92%,
+        transparent 100%
+    );
 }
 
 .recommendation-track {
@@ -694,6 +719,12 @@ body.home-fixed-view .recommendations-dashboard {
     animation-play-state: paused;
 }
 
+.recommendation-content.is-song-menu-open .recommendation-carousel-viewport {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-28px);
+}
+
 .recommendation-track-group {
     display: flex;
     flex: 0 0 auto;
@@ -702,9 +733,9 @@ body.home-fixed-view .recommendations-dashboard {
 
 .recommendation-column {
     display: grid;
-    flex: 0 0 calc((100cqw - 36px) / 4);
-    grid-template-rows: repeat(2, minmax(95px, auto));
-    gap: 12px;
+    flex: 0 0 calc((100cqw - 48px) / 5);
+    grid-template-rows: repeat(2, 88px);
+    gap: 8px;
 }
 
 @keyframes recommendation-carousel-scroll {
@@ -724,20 +755,27 @@ body.home-fixed-view .recommendations-dashboard {
 }
 
 .recommendation-song-card {
-    padding: 11px;
-    grid-template-columns: 28px minmax(0, 1fr);
-    column-gap: 8px;
+    display: grid;
+    padding: 8px;
+    min-height: 0;
+    height: 88px;
+    grid-template-columns: 22px minmax(0, 1fr);
+    grid-template-rows: 2.35em 1.5em 1.5em;
+    align-items: start;
+    align-content: start;
+    column-gap: 7px;
+    overflow: hidden;
 }
 
 .recommendation-song-card .song-icon-tile {
-    width: 28px;
-    height: 28px;
-    border-radius: 7px;
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
 }
 
 .recommendation-song-card .music-note-icon {
-    width: 14px;
-    height: 14px;
+    width: 11px;
+    height: 11px;
 }
 
 .recommendation-song-card[role="button"] {
@@ -752,15 +790,32 @@ body.home-fixed-view .recommendations-dashboard {
 .recommendation-song-menu {
     display: grid;
     gap: 16px;
-    margin-top: 20px;
+    position: absolute;
+    z-index: 2;
+    top: 58px;
+    right: 0;
+    left: 0;
+    max-height: 230px;
+    overflow-y: auto;
+    margin-top: 0;
     padding: 18px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-medium);
     border-radius: var(--border-radius);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(28px);
+    transition: opacity 260ms ease, transform 260ms ease;
 }
 
 .recommendation-song-menu[hidden] {
     display: none;
+}
+
+.recommendation-content.is-song-menu-open .recommendation-song-menu {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(0);
 }
 
 .recommendation-song-menu-header {
@@ -796,7 +851,13 @@ body.home-fixed-view .recommendations-dashboard {
 }
 
 .recommendation-title {
-    font-size: 11px;
+    font-size: 10px;
+    margin: 0;
+    line-height: 1.15;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
 }
 
 .recommendation-artist,
@@ -809,10 +870,14 @@ body.home-fixed-view .recommendations-dashboard {
 .recommendation-artist,
 .recommendation-genre {
     font-size: 10px;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .recommendation-genre {
-    margin-top: 4px;
+    margin-top: 0;
     color: var(--text-tertiary);
 }
 
@@ -859,7 +924,7 @@ body.home-fixed-view .recommendations-dashboard {
     }
 
     .recommendation-column {
-        flex-basis: calc((100cqw - 24px) / 3);
+        flex-basis: calc((100cqw - 36px) / 4);
     }
 }
 
@@ -880,7 +945,7 @@ body.home-fixed-view .recommendations-dashboard {
         }
 
         body.home-fixed-view .recommendation-column {
-            grid-template-rows: repeat(2, minmax(78px, auto));
+            grid-template-rows: repeat(2, 82px);
         }
 
         body.home-fixed-view .home-playlists-grid {
@@ -899,6 +964,11 @@ body.home-fixed-view .recommendations-dashboard {
 
     .recommendation-column {
         flex-basis: calc((100cqw - 12px) / 2);
+        grid-template-rows: repeat(2, 82px);
+    }
+
+    .recommendation-song-card {
+        height: 82px;
     }
 }
 

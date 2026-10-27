@@ -1243,6 +1243,8 @@ function renderRecommendations() {
 function openRecommendationSongMenu(song, viewport) {
     selectedRecommendationSong = song;
     viewport.classList.add('is-paused');
+    const recommendationContent = viewport.closest('.recommendation-content');
+    recommendationContent.classList.add('is-song-menu-open');
     document.getElementById('recommendationSongHeading').textContent = song.title || song.track_name || 'Untitled';
     document.getElementById('recommendationSongArtist').textContent = song.artists || song.artist || 'Unknown artist';
     const content = document.getElementById('recommendationSongMenuContent');
@@ -1343,6 +1345,8 @@ function showRecommendationSongMessage(message) {
 function closeRecommendationSongMenu() {
     if (recommendationCarouselViewport) {
         recommendationCarouselViewport.classList.remove('is-paused');
+        const recommendationContent = recommendationCarouselViewport.closest('.recommendation-content');
+        recommendationContent.classList.remove('is-song-menu-open');
     }
     selectedRecommendationSong = null;
     document.getElementById('recommendationSongMenu').hidden = true;
